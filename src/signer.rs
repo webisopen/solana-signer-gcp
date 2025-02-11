@@ -1,0 +1,203 @@
+use core::fmt;
+
+use gcloud_sdk::{
+    google::cloud::kms::{
+        self,
+        v1::{
+            key_management_service_client::KeyManagementServiceClient, AsymmetricSignRequest,
+            GetPublicKeyRequest, PublicKey,
+        },
+    },
+    tonic::{self, Request},
+    GoogleApi, GoogleAuthMiddleware,
+};
+use hyper_proxy::{Intercept, Proxy, ProxyConnector};
+use thiserror::Error;
+// use ed25519::pkcs8::Pubkey;
+
+type Client = GoogleApi<KeyManagementServiceClient<GoogleAuthMiddleware>>;
+
+#[derive(Clone, Debug)]
+pub struct GcpKeyRingRef {
+    /// The GCP project ID.
+    pub google_project_id: String,
+    /// The GCP location e.g. `global`.
+    pub location: String,
+    /// The GCP key ring name.
+    pub name: String,
+}
+
+/// Reference to a GCP KeyRing.
+impl GcpKeyRingRef {
+    /// Create a new GCP KeyRing reference.
+    pub fn new(google_project_id: &str, location: &str, name: &str) -> Self {
+        Self {
+            google_project_id: google_project_id.to_string(),
+            location: location.to_string(),
+            name: name.to_string(),
+        }
+    }
+}
+
+/// Identifies a specific key version in the key ring.
+#[derive(Debug)]
+pub struct KeySpecifier(String);
+
+impl KeySpecifier {
+    /// Construct a new specifier for a key with a given keyring, id and version.
+    pub fn new(keyring: GcpKeyRingRef, key_id: &str, version: u64) -> Self {
+        Self(format!(
+            "projects/{}/locations/{}/keyRings/{}/cryptoKeys/{}/cryptoKeyVersions/{}",
+            keyring.google_project_id, keyring.location, keyring.name, key_id, version,
+        ))
+    }
+}
+
+/// Google Cloud Platform Key Management Service (GCP KMS) solana signer.
+///
+/// The GCP KMS signer uses the GCP KMS service to sign transactions.
+///
+/// # Example
+///
+/// ```no_run
+/// use solana_signer_gcp::Signer;
+/// ```
+#[derive(Clone)]
+pub struct GcpSigner {
+    client: Client,
+    key_name: String,
+    // pubkey: Pubkey;
+    address: String,
+}
+
+impl fmt::Debug for GcpSigner {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("GcpSigner")
+            .field("key_name", &self.key_name)
+            .field("address", &self.address)
+            .finish()
+    }
+}
+
+/// Errors thrown by [`GcpSigner`].
+#[derive(Debug, Error)]
+pub enum GcpSignerError {
+    #[error(transparent)]
+    GoogleKmsError(#[from] gcloud_sdk::error::Error),
+
+    #[error(transparent)]
+    RequestError(#[from] tonic::Status),
+}
+
+impl solana_sdk::signer::Signer for GcpSigner {
+    fn try_pubkey(&self) -> Result<solana_sdk::pubkey::Pubkey, solana_sdk::signer::SignerError> {
+        Ok(self.pubkey())
+    }
+
+    fn try_sign_message(
+        &self,
+        message: &[u8],
+    ) -> Result<solana_sdk::signature::Signature, solana_sdk::signer::SignerError> {
+        todo!()
+    }
+
+    fn is_interactive(&self) -> bool {
+        todo!()
+    }
+}
+
+impl GcpSigner {
+    pub async fn new(client: Client, key_specifier: KeySpecifier) -> Result<Self, GcpSignerError> {
+        let key_name = key_specifier.0;
+        let resp = request_get_pubkey(&client, &key_name).await?;
+
+        Ok(Self {
+            client,
+            key_name,
+            address: String::from(""),
+        })
+    }
+
+    pub async fn get_pubkey(&self) -> Result<PublicKey, GcpSignerError> {
+        request_get_pubkey(&self.client, &self.key_name).await
+    }
+}
+
+#[instrument(skip(client), err)]
+async fn request_get_pubkey(
+    client: &Client,
+    kms_key_name: &str,
+) -> Result<PublicKey, GcpSignerError> {
+    let mut request = tonic::Request::new(GetPublicKeyRequest {
+        name: kms_key_name.to_string(),
+    });
+    request.metadata_mut().insert(
+        "x-goog-request-params",
+        format!("name={}", &kms_key_name).parse().unwrap(),
+    );
+
+    client
+        .get()
+        .get_public_key(request)
+        .await
+        .map(|r| r.into_inner())
+        .map_err(Into::into)
+}
+
+mod test {
+    use super::*;
+    use gcloud_sdk::google::cloud::kms::v1::PublicKey;
+
+    #[tokio::test]
+    async fn test_request_get_pubkey() {
+        let client = GoogleApi::from_function(
+            KeyManagementServiceClient::new,
+            "https://cloudkms.googleapis.com",
+            None,
+        )
+        .await
+        .unwrap();
+        let key_name = "projects/kms-only-414412/locations/us/keyRings/keyring_solana/cryptoKeys/key_solana/cryptoKeyVersions/1";
+        let resp = request_get_pubkey(&client, key_name).await.unwrap();
+        println!("resp: {:?}", resp);
+        // assert_eq!(resp, PublicKey::default());
+    }
+
+    // #[test]
+    // fn test_key_specifier() {
+    //     let keyring = GcpKeyRingRef::new("test", "global", "test");
+    //     let key_specifier = KeySpecifier::new(keyring, "test", 1);
+    //     assert_eq!(
+    //         key_specifier.0,
+    //         "projects/test/locations/global/keyRings/test/cryptoKeys/test/cryptoKeyVersions/1"
+    //     );
+    // }
+
+    // #[test]
+    // fn test_gcp_keyring_ref() {
+    //     let keyring = GcpKeyRingRef::new("test", "global", "test");
+    //     assert_eq!(keyring.google_project_id, "test");
+    //     assert_eq!(keyring.location, "global");
+    //     assert_eq!(keyring.name, "test");
+    // }
+
+    // #[test]
+    // fn test_gcp_signer_debug() {
+    //     let client = Client::new().unwrap();
+    //     let key_specifier =
+    //         KeySpecifier::new(GcpKeyRingRef::new("test", "global", "test"), "test", 1);
+    //     let signer = GcpSigner::new(client, key_specifier).unwrap();
+    //     assert_eq!(
+    //         format!("{:?}", signer),
+    //         "GcpSigner { key_name: \"projects/test/locations/global/keyRings/test/cryptoKeys/test/cryptoKeyVersions/1\", address: \"\" }"
+    //     );
+    // }
+
+    // #[test]
+    // fn test_gcp_keyring_ref_new() {
+    //     let keyring = GcpKeyRingRef::new("test", "global", "test");
+    //     assert_eq!(keyring.google_project_id, "test");
+    //     assert_eq!(keyring.location, "global");
+    //     assert_eq!(keyring.name, "test");
+    // }
+}

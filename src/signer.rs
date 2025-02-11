@@ -132,7 +132,7 @@ impl solana_sdk::signer::Signer for GcpSigner {
 
     fn try_sign_message(
         &self,
-        message: &[u8],
+        _message: &[u8],
     ) -> Result<solana_sdk::signature::Signature, solana_sdk::signer::SignerError> {
         todo!()
     }

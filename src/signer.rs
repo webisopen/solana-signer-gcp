@@ -1,17 +1,26 @@
 use core::fmt;
 
+use base64::Engine;
 use gcloud_sdk::{
     google::cloud::kms::{
-        self,
+        // self,
         v1::{
-            key_management_service_client::KeyManagementServiceClient, AsymmetricSignRequest,
-            GetPublicKeyRequest, PublicKey,
+            key_management_service_client::KeyManagementServiceClient,
+            // AsymmetricSignRequest,
+            GetPublicKeyRequest,
+            PublicKey,
         },
     },
-    tonic::{self, Request},
+    tonic::{
+        self,
+        // Request
+    },
     GoogleApi, GoogleAuthMiddleware,
 };
-use hyper_proxy::{Intercept, Proxy, ProxyConnector};
+use solana_sdk::{
+    pubkey::{self, Pubkey},
+    signer::SignerError,
+};
 use thiserror::Error;
 // use ed25519::pkcs8::Pubkey;
 
@@ -89,9 +98,35 @@ pub enum GcpSignerError {
     RequestError(#[from] tonic::Status),
 }
 
+impl Into<SignerError> for GcpSignerError {
+    fn into(self) -> SignerError {
+        SignerError::Custom(self.to_string())
+    }
+}
+
 impl solana_sdk::signer::Signer for GcpSigner {
     fn try_pubkey(&self) -> Result<solana_sdk::pubkey::Pubkey, solana_sdk::signer::SignerError> {
-        Ok(self.pubkey())
+        // Assuming you have a way to block on the future
+        let pubkey = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(self.get_pubkey())
+            .map_err(|e| SignerError::Custom(e.to_string()))?;
+
+        let clean_b64 = pubkey
+            .pem
+            .replace("-----BEGIN PUBLIC KEY-----", "")
+            .replace("-----END PUBLIC KEY-----", "")
+            .replace('\n', "")
+            .trim()
+            .to_string();
+
+        let der_bytes = base64::engine::general_purpose::STANDARD
+            .decode(clean_b64)
+            .unwrap();
+
+        Ok(Pubkey::from_str_const(
+            std::str::from_utf8(&der_bytes).unwrap(),
+        ))
     }
 
     fn try_sign_message(
@@ -109,7 +144,7 @@ impl solana_sdk::signer::Signer for GcpSigner {
 impl GcpSigner {
     pub async fn new(client: Client, key_specifier: KeySpecifier) -> Result<Self, GcpSignerError> {
         let key_name = key_specifier.0;
-        let resp = request_get_pubkey(&client, &key_name).await?;
+        let _resp = request_get_pubkey(&client, &key_name).await?;
 
         Ok(Self {
             client,

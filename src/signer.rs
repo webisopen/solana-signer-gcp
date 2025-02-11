@@ -144,9 +144,10 @@ async fn request_get_pubkey(
         .map_err(Into::into)
 }
 
+#[cfg(test)]
 mod test {
     use super::*;
-    use gcloud_sdk::google::cloud::kms::v1::PublicKey;
+    // use gcloud_sdk::google::cloud::kms::v1::PublicKey;
 
     #[tokio::test]
     async fn test_request_get_pubkey() {

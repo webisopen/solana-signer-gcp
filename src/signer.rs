@@ -106,11 +106,12 @@ impl Into<SignerError> for GcpSignerError {
 }
 
 impl solana_sdk::signer::Signer for GcpSigner {
-    fn try_pubkey(&self) -> Result<Pubkey, solana_sdk::signer::SignerError> {
+    #[tokio::main]
+    async fn try_pubkey(&self) -> Result<Pubkey, SignerError> {
         // Assuming you have a way to block on the future
-        let pubkey = tokio::runtime::Runtime::new()
-            .unwrap()
-            .block_on(self.get_pubkey())
+        let pubkey = self
+            .get_pubkey()
+            .await
             .map_err(|e| SignerError::Custom(e.to_string()))?;
 
         let clean_b64 = pubkey
@@ -133,7 +134,7 @@ impl solana_sdk::signer::Signer for GcpSigner {
     fn try_sign_message(
         &self,
         _message: &[u8],
-    ) -> Result<solana_sdk::signature::Signature, solana_sdk::signer::SignerError> {
+    ) -> Result<solana_sdk::signature::Signature, SignerError> {
         todo!()
     }
 

@@ -229,7 +229,7 @@ mod test {
             .unwrap();
         assert_eq!(
             signer.pubkey(),
-            Pubkey::from_str_const("0*0+ep!;�Lm�}%vF��(,�E")
+            Pubkey::from_str_const("2uDMykU9nKeSUg2JLPktsMNYyrUmv7y9EpLHn847H7Zn")
         );
     }
 
@@ -249,5 +249,16 @@ mod test {
         assert_eq!(keyring.google_project_id, "test");
         assert_eq!(keyring.location, "global");
         assert_eq!(keyring.name, "test");
+    }
+
+    #[test]
+    fn test_public_key_pem() {
+        let pem_str = "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAHDvdzUyFFG3pdn0ldkbPD81WliidLKqBHxfAt/3FbkU=\n-----END PUBLIC KEY-----\n";
+        let pkey = pem::parse(pem_str).unwrap();
+        let content = pkey.contents();
+        let mut array = [0u8; 32];
+        array.copy_from_slice(&content[12..]);
+        let pubkey = Pubkey::new_from_array(array);
+        println!("{:?}", pubkey);
     }
 }

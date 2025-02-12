@@ -1,5 +1,6 @@
 #![cfg_attr(debug_assertions, allow(dead_code, unused_imports))]
 use core::fmt;
+use std::{cell::OnceCell, sync::Arc};
 
 use base64::Engine;
 use gcloud_sdk::{
@@ -20,7 +21,7 @@ use gcloud_sdk::{
 };
 use solana_sdk::{
     pubkey::{self, Pubkey},
-    signer::SignerError,
+    signer::{Signer, SignerError},
 };
 use thiserror::Error;
 // use ed25519::pkcs8::Pubkey;
@@ -76,7 +77,7 @@ impl KeySpecifier {
 pub struct GcpSigner {
     client: Client,
     key_name: String,
-    // pubkey: Pubkey;
+    pubkey: Arc<OnceCell<Pubkey>>,
     address: String,
 }
 
@@ -97,6 +98,9 @@ pub enum GcpSignerError {
 
     #[error(transparent)]
     RequestError(#[from] tonic::Status),
+
+    #[error(transparent)]
+    Base64Error(#[from] base64::DecodeError),
 }
 
 impl Into<SignerError> for GcpSignerError {
@@ -105,30 +109,14 @@ impl Into<SignerError> for GcpSignerError {
     }
 }
 
-impl solana_sdk::signer::Signer for GcpSigner {
+impl Signer for GcpSigner {
     #[tokio::main]
     async fn try_pubkey(&self) -> Result<Pubkey, SignerError> {
-        // Assuming you have a way to block on the future
-        let pubkey = self
-            .get_pubkey()
-            .await
-            .map_err(|e| SignerError::Custom(e.to_string()))?;
-
-        let clean_b64 = pubkey
-            .pem
-            .replace("-----BEGIN PUBLIC KEY-----", "")
-            .replace("-----END PUBLIC KEY-----", "")
-            .replace('\n', "")
-            .trim()
-            .to_string();
-
-        let der_bytes = base64::engine::general_purpose::STANDARD
-            .decode(clean_b64)
-            .map_err(|e| SignerError::Custom(e.to_string()))?;
-
-        Ok(Pubkey::from_str_const(
-            std::str::from_utf8(&der_bytes).unwrap(),
-        ))
+        Ok(self
+            .pubkey
+            .get()
+            .copied()
+            .ok_or(SignerError::Custom("Cannot get pubkey".to_string()))?)
     }
 
     fn try_sign_message(
@@ -146,11 +134,24 @@ impl solana_sdk::signer::Signer for GcpSigner {
 impl GcpSigner {
     pub async fn new(client: Client, key_specifier: KeySpecifier) -> Result<Self, GcpSignerError> {
         let key_name = key_specifier.0;
-        let _resp = request_get_pubkey(&client, &key_name).await?;
+        let pubkey = request_get_pubkey(&client, &key_name).await?;
+
+        let clean_b64 = pubkey
+            .pem
+            .replace("-----BEGIN PUBLIC KEY-----", "")
+            .replace("-----END PUBLIC KEY-----", "")
+            .replace('\n', "")
+            .trim()
+            .to_string();
+
+        let der_bytes = base64::engine::general_purpose::STANDARD.decode(clean_b64)?;
 
         Ok(Self {
             client,
             key_name,
+            pubkey: Arc::new(OnceCell::from(Pubkey::from_str_const(
+                std::str::from_utf8(&der_bytes).unwrap(),
+            ))),
             address: String::from(""),
         })
     }

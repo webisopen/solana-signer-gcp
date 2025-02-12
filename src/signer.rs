@@ -2,7 +2,6 @@
 use core::fmt;
 use std::{cell::OnceCell, sync::Arc};
 
-use base64::Engine;
 use gcloud_sdk::{
     google::cloud::kms::{
         // self,
@@ -24,7 +23,6 @@ use solana_sdk::{
     signer::{Signer, SignerError},
 };
 use thiserror::Error;
-// use ed25519::pkcs8::Pubkey;
 
 type Client = GoogleApi<KeyManagementServiceClient<GoogleAuthMiddleware>>;
 
@@ -100,7 +98,10 @@ pub enum GcpSignerError {
     RequestError(#[from] tonic::Status),
 
     #[error(transparent)]
-    Base64Error(#[from] base64::DecodeError),
+    PemError(#[from] pem::PemError),
+
+    #[error("Invalid pubkey length {0}")]
+    InvalidPubkeyLength(usize),
 }
 
 impl Into<SignerError> for GcpSignerError {
@@ -136,22 +137,10 @@ impl GcpSigner {
         let key_name = key_specifier.0;
         let pubkey = request_get_pubkey(&client, &key_name).await?;
 
-        let clean_b64 = pubkey
-            .pem
-            .replace("-----BEGIN PUBLIC KEY-----", "")
-            .replace("-----END PUBLIC KEY-----", "")
-            .replace('\n', "")
-            .trim()
-            .to_string();
-
-        let der_bytes = base64::engine::general_purpose::STANDARD.decode(clean_b64)?;
-
         Ok(Self {
             client,
             key_name,
-            pubkey: Arc::new(OnceCell::from(Pubkey::from_str_const(
-                std::str::from_utf8(&der_bytes).unwrap(),
-            ))),
+            pubkey: Arc::new(OnceCell::from(from_public_key_pem(pubkey)?)),
             address: String::from(""),
         })
     }
@@ -180,6 +169,27 @@ async fn request_get_pubkey(
         .await
         .map(|r| r.into_inner())
         .map_err(Into::into)
+}
+
+#[instrument(err)]
+fn from_public_key_pem(key: PublicKey) -> Result<Pubkey, GcpSignerError> {
+    let pkey = pem::parse(key.pem)?;
+
+    let content = pkey.contents();
+
+    let mut array = [0u8; 32];
+
+    match content.len() {
+        32 => {
+            array.copy_from_slice(content);
+            Ok(Pubkey::new_from_array(array))
+        }
+        44 => {
+            array.copy_from_slice(&content[12..]);
+            Ok(Pubkey::new_from_array(array))
+        }
+        size => Err(GcpSignerError::InvalidPubkeyLength(size)),
+    }
 }
 
 #[cfg(test)]

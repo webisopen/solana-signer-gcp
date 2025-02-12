@@ -3110,9 +3110,9 @@ dependencies = [
 name = "solana-signer-gcp"
 version = "0.1.0"
 dependencies = [
- "base64 0.22.1",
  "ed25519 2.2.3",
  "gcloud-sdk",
+ "pem",
  "solana-sdk",
  "thiserror 2.0.11",
  "tokio",

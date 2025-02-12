@@ -182,6 +182,8 @@ async fn request_get_pubkey(
 
 #[cfg(test)]
 mod test {
+    use solana_sdk::signer::Signer;
+
     use super::*;
     // use gcloud_sdk::google::cloud::kms::v1::PublicKey;
 
@@ -199,6 +201,25 @@ mod test {
 
         assert_eq!(resp.pem, String::from("-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAHDvdzUyFFG3pdn0ldkbPD81WliidLKqBHxfAt/3FbkU=\n-----END PUBLIC KEY-----\n"));
         assert_eq!(resp.name, key_name);
+    }
+
+    #[tokio::test]
+    async fn test_sol_pubkey() {
+        let client = GoogleApi::from_function(
+            KeyManagementServiceClient::new,
+            "https://cloudkms.googleapis.com",
+            None,
+        )
+        .await
+        .unwrap();
+        let key_name = "projects/naturalselectionlabs/locations/us/keyRings/solana/cryptoKeys/solana/cryptoKeyVersions/1";
+        let signer = GcpSigner::new(client, KeySpecifier(String::from(key_name)))
+            .await
+            .unwrap();
+        assert_eq!(
+            signer.pubkey(),
+            Pubkey::from_str_const("0*0+ep!;�Lm�}%vF��(,�E")
+        );
     }
 
     #[test]

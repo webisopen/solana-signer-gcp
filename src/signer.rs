@@ -194,7 +194,7 @@ mod test {
         )
         .await
         .unwrap();
-        let key_name = "projects/kms-only-414412/locations/us/keyRings/keyring_solana/cryptoKeys/key_solana/cryptoKeyVersions/1";
+        let key_name = "projects/naturalselectionlabs/locations/us/keyRings/solana/cryptoKeys/solana/cryptoKeyVersions/1";
         let resp = request_get_pubkey(&client, key_name).await.unwrap();
         println!("resp: {:?}", resp);
         // assert_eq!(resp, PublicKey::default());

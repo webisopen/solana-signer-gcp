@@ -70,7 +70,7 @@ impl KeySpecifier {
 /// # Example
 ///
 /// ```no_run
-/// use solana_signer_gcp::Signer;
+/// //use solana_signer_gcp::Signer;
 /// ```
 #[derive(Clone)]
 pub struct GcpSigner {

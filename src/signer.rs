@@ -4,22 +4,22 @@ use std::{cell::OnceCell, sync::Arc};
 
 use gcloud_sdk::{
     google::cloud::kms::{
-        // self,
+        self,
         v1::{
-            key_management_service_client::KeyManagementServiceClient,
-            // AsymmetricSignRequest,
-            GetPublicKeyRequest,
-            PublicKey,
+            key_management_service_client::KeyManagementServiceClient, AsymmetricSignRequest,
+            GetPublicKeyRequest, PublicKey,
         },
     },
     tonic::{
         self,
+        Request,
         // Request
     },
     GoogleApi, GoogleAuthMiddleware,
 };
 use solana_sdk::{
     pubkey::{self, Pubkey},
+    signature::Signature,
     signer::{Signer, SignerError},
 };
 use thiserror::Error;
@@ -119,15 +119,19 @@ impl Signer for GcpSigner {
             .ok_or(SignerError::Custom("Cannot get pubkey".to_string()))?)
     }
 
-    fn try_sign_message(
+    #[tokio::main]
+    async fn try_sign_message(
         &self,
-        _message: &[u8],
+        message: &[u8],
     ) -> Result<solana_sdk::signature::Signature, SignerError> {
-        todo!()
+        request_sign_digest(&self.client, &self.key_name, message)
+            .await
+            .and_then(decode_signature)
+            .map_err(Into::into)
     }
 
     fn is_interactive(&self) -> bool {
-        todo!()
+        false
     }
 }
 
@@ -170,6 +174,30 @@ async fn request_get_pubkey(
         .map_err(Into::into)
 }
 
+#[instrument(skip(client, digest), fields(digest = %hex::encode(digest)), err)]
+async fn request_sign_digest(
+    client: &Client,
+    kms_key_name: &str,
+    digest: &[u8],
+) -> Result<Vec<u8>, GcpSignerError> {
+    let mut request = Request::new(AsymmetricSignRequest {
+        name: kms_key_name.to_string(),
+        digest: Some(kms::v1::Digest {
+            digest: Some(kms::v1::digest::Digest::Sha256(digest.to_vec())),
+        }),
+        ..Default::default()
+    });
+
+    request.metadata_mut().insert(
+        "x-goog-request-params",
+        format!("name={}", kms_key_name).parse().unwrap(),
+    );
+
+    let response = client.get().asymmetric_sign(request).await?;
+    let signature = response.into_inner().signature;
+    Ok(signature)
+}
+
 #[instrument(err)]
 fn from_public_key_pem(key: PublicKey) -> Result<Pubkey, GcpSignerError> {
     let pkey = pem::parse(key.pem)?;
@@ -189,6 +217,12 @@ fn from_public_key_pem(key: PublicKey) -> Result<Pubkey, GcpSignerError> {
         }
         size => Err(GcpSignerError::InvalidPubkeyLength(size)),
     }
+}
+
+fn decode_signature(raw: Vec<u8>) -> Result<Signature, GcpSignerError> {
+    let mut bytes = [0; 64];
+    bytes.copy_from_slice(&raw);
+    Ok(Signature::from(bytes))
 }
 
 #[cfg(test)]
@@ -259,6 +293,9 @@ mod test {
         let mut array = [0u8; 32];
         array.copy_from_slice(&content[12..]);
         let pubkey = Pubkey::new_from_array(array);
-        println!("{:?}", pubkey);
+        assert_eq!(
+            pubkey,
+            Pubkey::from_str_const("2uDMykU9nKeSUg2JLPktsMNYyrUmv7y9EpLHn847H7Zn")
+        );
     }
 }

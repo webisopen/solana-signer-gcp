@@ -106,7 +106,7 @@ impl Into<SignerError> for GcpSignerError {
 }
 
 impl solana_sdk::signer::Signer for GcpSigner {
-    fn try_pubkey(&self) -> Result<solana_sdk::pubkey::Pubkey, solana_sdk::signer::SignerError> {
+    fn try_pubkey(&self) -> Result<Pubkey, solana_sdk::signer::SignerError> {
         // Assuming you have a way to block on the future
         let pubkey = tokio::runtime::Runtime::new()
             .unwrap()
@@ -123,7 +123,7 @@ impl solana_sdk::signer::Signer for GcpSigner {
 
         let der_bytes = base64::engine::general_purpose::STANDARD
             .decode(clean_b64)
-            .unwrap();
+            .map_err(|e| SignerError::Custom(e.to_string()))?;
 
         Ok(Pubkey::from_str_const(
             std::str::from_utf8(&der_bytes).unwrap(),
@@ -196,45 +196,26 @@ mod test {
         .unwrap();
         let key_name = "projects/naturalselectionlabs/locations/us/keyRings/solana/cryptoKeys/solana/cryptoKeyVersions/1";
         let resp = request_get_pubkey(&client, key_name).await.unwrap();
-        println!("resp: {:?}", resp);
-        // assert_eq!(resp, PublicKey::default());
+
+        assert_eq!(resp.pem, String::from("-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAHDvdzUyFFG3pdn0ldkbPD81WliidLKqBHxfAt/3FbkU=\n-----END PUBLIC KEY-----\n"));
+        assert_eq!(resp.name, key_name);
     }
 
-    // #[test]
-    // fn test_key_specifier() {
-    //     let keyring = GcpKeyRingRef::new("test", "global", "test");
-    //     let key_specifier = KeySpecifier::new(keyring, "test", 1);
-    //     assert_eq!(
-    //         key_specifier.0,
-    //         "projects/test/locations/global/keyRings/test/cryptoKeys/test/cryptoKeyVersions/1"
-    //     );
-    // }
+    #[test]
+    fn test_key_specifier() {
+        let keyring = GcpKeyRingRef::new("test", "global", "test");
+        let key_specifier = KeySpecifier::new(keyring, "test", 1);
+        assert_eq!(
+            key_specifier.0,
+            "projects/test/locations/global/keyRings/test/cryptoKeys/test/cryptoKeyVersions/1"
+        );
+    }
 
-    // #[test]
-    // fn test_gcp_keyring_ref() {
-    //     let keyring = GcpKeyRingRef::new("test", "global", "test");
-    //     assert_eq!(keyring.google_project_id, "test");
-    //     assert_eq!(keyring.location, "global");
-    //     assert_eq!(keyring.name, "test");
-    // }
-
-    // #[test]
-    // fn test_gcp_signer_debug() {
-    //     let client = Client::new().unwrap();
-    //     let key_specifier =
-    //         KeySpecifier::new(GcpKeyRingRef::new("test", "global", "test"), "test", 1);
-    //     let signer = GcpSigner::new(client, key_specifier).unwrap();
-    //     assert_eq!(
-    //         format!("{:?}", signer),
-    //         "GcpSigner { key_name: \"projects/test/locations/global/keyRings/test/cryptoKeys/test/cryptoKeyVersions/1\", address: \"\" }"
-    //     );
-    // }
-
-    // #[test]
-    // fn test_gcp_keyring_ref_new() {
-    //     let keyring = GcpKeyRingRef::new("test", "global", "test");
-    //     assert_eq!(keyring.google_project_id, "test");
-    //     assert_eq!(keyring.location, "global");
-    //     assert_eq!(keyring.name, "test");
-    // }
+    #[test]
+    fn test_gcp_keyring_ref() {
+        let keyring = GcpKeyRingRef::new("test", "global", "test");
+        assert_eq!(keyring.google_project_id, "test");
+        assert_eq!(keyring.location, "global");
+        assert_eq!(keyring.name, "test");
+    }
 }

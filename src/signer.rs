@@ -111,8 +111,7 @@ impl Into<SignerError> for GcpSignerError {
 }
 
 impl Signer for GcpSigner {
-    #[tokio::main]
-    async fn try_pubkey(&self) -> Result<Pubkey, SignerError> {
+    fn try_pubkey(&self) -> Result<Pubkey, SignerError> {
         Ok(self
             .pubkey
             .get()
@@ -228,11 +227,10 @@ mod test {
         let signer = GcpSigner::new(client, KeySpecifier(String::from(key_name)))
             .await
             .unwrap();
-        println!("{:?}", signer);
-        // assert_eq!(
-        //     signer.pubkey(),
-        //     Pubkey::from_str_const("0*0+ep!;�Lm�}%vF��(,�E")
-        // );
+        assert_eq!(
+            signer.pubkey(),
+            Pubkey::from_str_const("0*0+ep!;�Lm�}%vF��(,�E")
+        );
     }
 
     #[test]

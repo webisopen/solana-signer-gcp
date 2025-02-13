@@ -232,6 +232,8 @@ mod test {
     use super::*;
     // use gcloud_sdk::google::cloud::kms::v1::PublicKey;
 
+    const KEY_NAME: &str = "projects/naturalselectionlabs/locations/us/keyRings/solana/cryptoKeys/solana/cryptoKeyVersions/1";
+
     #[tokio::test]
     async fn test_request_get_pubkey() {
         let client = GoogleApi::from_function(
@@ -241,11 +243,35 @@ mod test {
         )
         .await
         .unwrap();
-        let key_name = "projects/naturalselectionlabs/locations/us/keyRings/solana/cryptoKeys/solana/cryptoKeyVersions/1";
+        let key_name = KEY_NAME;
         let resp = request_get_pubkey(&client, key_name).await.unwrap();
 
         assert_eq!(resp.pem, String::from("-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAHDvdzUyFFG3pdn0ldkbPD81WliidLKqBHxfAt/3FbkU=\n-----END PUBLIC KEY-----\n"));
         assert_eq!(resp.name, key_name);
+    }
+
+    #[tokio::test]
+    async fn test_request_sign_digest() {
+        let client = GoogleApi::from_function(
+            KeyManagementServiceClient::new,
+            "https://cloudkms.googleapis.com",
+            None,
+        )
+        .await
+        .unwrap();
+        let key_name = KEY_NAME;
+
+        let digest = b"hello world";
+        let resp = request_sign_digest(&client, key_name, digest)
+            .await
+            .unwrap();
+        let except = [
+            181, 191, 109, 41, 160, 193, 142, 180, 189, 128, 75, 238, 225, 137, 205, 105, 79, 163,
+            62, 20, 237, 215, 64, 66, 91, 153, 117, 133, 236, 192, 160, 253, 101, 158, 128, 115,
+            50, 181, 118, 60, 192, 247, 130, 182, 177, 15, 203, 109, 23, 152, 36, 158, 131, 118,
+            193, 70, 153, 188, 209, 196, 229, 0, 103, 5,
+        ];
+        assert_eq!(resp, except);
     }
 
     #[tokio::test]

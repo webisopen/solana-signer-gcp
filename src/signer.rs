@@ -68,8 +68,36 @@ impl KeySpecifier {
 ///
 /// # Example
 ///
-/// ```no_run
-/// //use solana_signer_gcp::Signer;
+/// ```rust
+/// use solana_sdk::signer::Signer;
+/// use solana_signer_gcp::{GcpKeyRingRef, GcpSigner, KeySpecifier};
+/// use gcloud_sdk::{
+///     google::cloud::kms::v1::key_management_service_client::KeyManagementServiceClient, GoogleApi,
+/// };
+///
+/// # async fn test() {
+///
+/// let project_id = std::env::var("GOOGLE_PROJECT_ID").expect("GOOGLE_PROJECT_ID");
+/// let location = std::env::var("GOOGLE_LOCATION").expect("GOOGLE_LOCATION");
+/// let keyring_name = std::env::var("GOOGLE_KEYRING").expect("GOOGLE_KEYRING");
+///
+/// let keyring = GcpKeyRingRef::new(&project_id, &location, &keyring_name);
+/// let client = GoogleApi::from_function(
+///     KeyManagementServiceClient::new,
+///     "https://cloudkms.googleapis.com",
+///     None,
+/// )
+/// .await
+/// .expect("Failed to create GCP KMS Client");
+///
+/// let key_name = "...";
+/// let key_version = 1;
+/// let key_specifier = KeySpecifier::new(keyring, key_name, key_version);
+/// let signer = GcpSigner::new(client, key_specifier).await.unwrap();
+///
+/// println!("{:?}",signer.pubkey());
+///
+/// }
 /// ```
 #[derive(Clone)]
 pub struct GcpSigner {

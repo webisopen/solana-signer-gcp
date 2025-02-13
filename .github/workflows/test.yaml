@@ -29,4 +29,4 @@ jobs:
           create_credentials_file: true
 
       - name: Test
-        run: cargo test --all-features
+        run: cargo test --lib

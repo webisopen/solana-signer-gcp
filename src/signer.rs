@@ -124,7 +124,7 @@ impl Signer for GcpSigner {
         &self,
         message: &[u8],
     ) -> Result<solana_sdk::signature::Signature, SignerError> {
-        request_sign_digest(&self.client, &self.key_name, message)
+        request_sign_data(&self.client, &self.key_name, message)
             .await
             .and_then(decode_signature)
             .map_err(Into::into)
@@ -174,17 +174,15 @@ async fn request_get_pubkey(
         .map_err(Into::into)
 }
 
-#[instrument(skip(client, digest), fields(digest = %hex::encode(digest)), err)]
-async fn request_sign_digest(
+#[instrument(skip(client, data), fields(data = %hex::encode(data)), err)]
+async fn request_sign_data(
     client: &Client,
     kms_key_name: &str,
-    digest: &[u8],
+    data: &[u8],
 ) -> Result<Vec<u8>, GcpSignerError> {
     let mut request = Request::new(AsymmetricSignRequest {
         name: kms_key_name.to_string(),
-        digest: Some(kms::v1::Digest {
-            digest: Some(kms::v1::digest::Digest::Sha256(digest.to_vec())),
-        }),
+        data: data.to_vec(),
         ..Default::default()
     });
 
@@ -261,10 +259,8 @@ mod test {
         .unwrap();
         let key_name = KEY_NAME;
 
-        let digest = b"hello world";
-        let resp = request_sign_digest(&client, key_name, digest)
-            .await
-            .unwrap();
+        let data = b"hello world";
+        let resp = request_sign_data(&client, key_name, data).await.unwrap();
         let except = [
             181, 191, 109, 41, 160, 193, 142, 180, 189, 128, 75, 238, 225, 137, 205, 105, 79, 163,
             62, 20, 237, 215, 64, 66, 91, 153, 117, 133, 236, 192, 160, 253, 101, 158, 128, 115,

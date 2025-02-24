@@ -257,7 +257,7 @@ fn decode_signature(raw: Vec<u8>) -> Result<Signature, GcpSignerError> {
 
 #[cfg(test)]
 mod test {
-    use solana_sdk::signer::Signer;
+    use solana_sdk::{hash::Hash, signer::Signer};
 
     use super::*;
     // use gcloud_sdk::google::cloud::kms::v1::PublicKey;
@@ -300,6 +300,36 @@ mod test {
             193, 70, 153, 188, 209, 196, 229, 0, 103, 5,
         ];
         assert_eq!(resp, except);
+    }
+
+    #[tokio::test]
+    async fn test_request_sign_transcation() {
+        let client = GoogleApi::from_function(
+            KeyManagementServiceClient::new,
+            "https://cloudkms.googleapis.com",
+            None,
+        )
+        .await
+        .unwrap();
+        let key_name = KEY_NAME;
+        let signer = GcpSigner::new(client, KeySpecifier(String::from(key_name)))
+            .await
+            .unwrap();
+
+        let instruction = solana_sdk::system_instruction::transfer(
+            &signer.pubkey(),
+            &Pubkey::from_str_const("HL2T3dbbY3DMymQAYDmNZP5jzy1bC2D4LenBe5JRxhyM"),
+            1000000000,
+        );
+        let message = solana_sdk::message::Message::new_with_blockhash(
+            &[instruction],
+            Some(&signer.pubkey()),
+            &Hash::default(),
+        );
+        let tx = solana_sdk::transaction::Transaction::new_unsigned(message);
+
+        let data = signer.try_sign_message(&tx.message_data()).unwrap();
+        assert_eq!(data, solana_sdk::signature::Signature::new_unique());
     }
 
     #[tokio::test]

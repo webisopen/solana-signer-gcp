@@ -324,7 +324,7 @@ mod test {
         assert_eq!(resp, except);
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_request_sign_transcation() {
         let client = GoogleApi::from_function(
             KeyManagementServiceClient::new,

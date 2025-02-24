@@ -147,15 +147,19 @@ impl Signer for GcpSigner {
             .ok_or(SignerError::Custom("Cannot get pubkey".to_string()))?)
     }
 
-    #[tokio::main]
-    async fn try_sign_message(
+    fn try_sign_message(
         &self,
         message: &[u8],
     ) -> Result<solana_sdk::signature::Signature, SignerError> {
-        request_sign_data(&self.client, &self.key_name, message)
-            .await
-            .and_then(decode_signature)
-            .map_err(Into::into)
+        tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(request_sign_data(
+                &self.client,
+                &self.key_name,
+                message,
+            ))
+        })
+        .and_then(decode_signature)
+        .map_err(Into::into)
     }
 
     fn is_interactive(&self) -> bool {

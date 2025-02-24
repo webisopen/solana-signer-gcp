@@ -251,6 +251,8 @@ fn decode_signature(raw: Vec<u8>) -> Result<Signature, GcpSignerError> {
 
 #[cfg(test)]
 mod test {
+    use std::str::FromStr;
+
     use solana_sdk::{hash::Hash, signer::Signer};
 
     use super::*;
@@ -318,7 +320,7 @@ mod test {
         let message = solana_sdk::message::Message::new_with_blockhash(
             &[instruction],
             Some(&signer.pubkey()),
-            &Hash::default(),
+            &Hash::from_str("4qJbvN5Uk9yGi4Xtfozvf9oA8hKSUqdxkiY73qPg6VfWRLo3XVxyQDTLZGYqKEbyAJuHTTKYZhMtFMYeFjtX9tQc").unwrap(),
         );
         let tx = solana_sdk::transaction::Transaction::new_unsigned(message);
 

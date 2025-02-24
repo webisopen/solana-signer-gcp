@@ -320,12 +320,12 @@ mod test {
         let message = solana_sdk::message::Message::new_with_blockhash(
             &[instruction],
             Some(&signer.pubkey()),
-            &Hash::from_str("4qJbvN5Uk9yGi4Xtfozvf9oA8hKSUqdxkiY73qPg6VfWRLo3XVxyQDTLZGYqKEbyAJuHTTKYZhMtFMYeFjtX9tQc").unwrap(),
+            &Hash::default(),
         );
         let tx = solana_sdk::transaction::Transaction::new_unsigned(message);
 
         let data = signer.try_sign_message(&tx.message_data()).unwrap();
-        assert_eq!(data, solana_sdk::signature::Signature::new_unique());
+        assert_eq!(data, solana_sdk::signature::Signature::from_str("4qJbvN5Uk9yGi4Xtfozvf9oA8hKSUqdxkiY73qPg6VfWRLo3XVxyQDTLZGYqKEbyAJuHTTKYZhMtFMYeFjtX9tQc").unwrap());
     }
 
     #[tokio::test]

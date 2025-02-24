@@ -3796,6 +3796,7 @@ name = "solana-signer-gcp"
 version = "0.1.0"
 dependencies = [
  "ed25519 2.2.3",
+ "futures",
  "gcloud-sdk",
  "hex",
  "pem",

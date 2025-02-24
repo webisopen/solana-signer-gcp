@@ -151,35 +151,7 @@ impl Signer for GcpSigner {
         &self,
         message: &[u8],
     ) -> Result<solana_sdk::signature::Signature, SignerError> {
-        let (client, key_name, message) =
-            (self.client.clone(), self.key_name.clone(), message.to_vec());
-
-        // match runtime
-        let signature_result = if let Ok(handle) = tokio::runtime::Handle::try_current() {
-            match handle.runtime_flavor() {
-                tokio::runtime::RuntimeFlavor::CurrentThread => std::thread::spawn(move || {
-                    let rt = tokio::runtime::Runtime::new().unwrap();
-                    rt.block_on(request_sign_data(&client, &key_name, &message))
-                })
-                .join()
-                .unwrap(),
-                tokio::runtime::RuntimeFlavor::MultiThread => tokio::task::block_in_place(|| {
-                    handle.block_on(request_sign_data(&client, &key_name, &message))
-                }),
-                _ => std::thread::spawn(move || {
-                    tokio::runtime::Runtime::new()
-                        .unwrap()
-                        .block_on(request_sign_data(&client, &key_name, &message))
-                })
-                .join()
-                .unwrap(),
-            }
-        } else {
-            let rt = tokio::runtime::Runtime::new().unwrap();
-            rt.block_on(request_sign_data(&client, &key_name, &message))
-        };
-
-        signature_result
+        futures::executor::block_on(request_sign_data(&self.client, &self.key_name, message))
             .and_then(decode_signature)
             .map_err(Into::into)
     }

@@ -1,5 +1,6 @@
 #![cfg_attr(debug_assertions, allow(dead_code, unused_imports))]
 use core::fmt;
+use futures::executor::block_on;
 use std::{cell::OnceCell, sync::Arc};
 
 use gcloud_sdk::{
@@ -151,15 +152,9 @@ impl Signer for GcpSigner {
         &self,
         message: &[u8],
     ) -> Result<solana_sdk::signature::Signature, SignerError> {
-        tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(request_sign_data(
-                &self.client,
-                &self.key_name,
-                message,
-            ))
-        })
-        .and_then(decode_signature)
-        .map_err(Into::into)
+        block_on(request_sign_data(&self.client, &self.key_name, message))
+            .and_then(decode_signature)
+            .map_err(Into::into)
     }
 
     fn is_interactive(&self) -> bool {
